@@ -4,16 +4,20 @@
     <arg name="dev" default="/dev/ttyACM0"/>
     <arg name="baud" default="115200"/>
     <arg name="address" default="128"/>
-    <arg name="max_speed" default="2.0"/>
-    <arg name="ticks_per_meter" default="4342.2"/>
-    <arg name="base_width" default="0.315"/>
+    <arg name="max_speed_linear" default="0.05"/>
+    <arg name="max_speed_angular" default="0.08"/>
+    <arg name="new_speed_command_weight" default="0.5"/>
+    <arg name="ticks_per_meter" default="3568.9"/> <!-- 4342.2 -->
+    <arg name="base_width" default="0.335"/>
     <arg name="run_diag" default="true"/>
 
-    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_node.py" name="roboclaw_node">
+    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_node.py" name="roboclaw_node" output="screen">
         <param name="~dev" value="$(arg dev)"/>
         <param name="~baud" value="$(arg baud)"/>
         <param name="~address" value="$(arg address)"/>
-        <param name="~max_speed" value="$(arg max_speed)"/>
+        <param name="~max_speed_linear" value="$(arg max_speed_linear)"/>
+        <param name="~max_speed_angular" value="$(arg max_speed_angular)"/>
+        <param name="~new_speed_command_weight" value="$(arg new_speed_command_weight)"/>
         <param name="~ticks_per_meter" value="$(arg ticks_per_meter)"/>
         <param name="~base_width" value="$(arg base_width)"/>
     </node>

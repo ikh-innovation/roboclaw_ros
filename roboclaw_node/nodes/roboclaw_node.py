@@ -8,6 +8,7 @@ import diagnostic_updater
 import roboclaw_driver.roboclaw_driver as roboclaw
 import rospy
 import tf
+import numpy as np
 from geometry_msgs.msg import Quaternion, Twist
 from nav_msgs.msg import Odometry
 
@@ -80,7 +81,7 @@ class EncoderOdom:
             rospy.logerr("Ignoring right encoder jump: cur %d, last %d" % (enc_right, self.last_enc_right))
         else:
             vel_x, vel_theta = self.update(enc_left, enc_right)
-            self.publish_odom(self.cur_x, self.cur_y, self.cur_theta, vel_x, vel_theta)
+            self.publish_odom(-self.cur_x, -self.cur_y, self.cur_theta, -vel_x, vel_theta)
 
     def publish_odom(self, cur_x, cur_y, cur_theta, vx, vth):
         quat = tf.transformations.quaternion_from_euler(0, 0, cur_theta)
@@ -144,7 +145,8 @@ class Node:
         rospy.loginfo("Connecting to roboclaw")
         dev_name = rospy.get_param("~dev", "/dev/ttyACM0")
         baud_rate = int(rospy.get_param("~baud", "115200"))
-
+        
+        
         self.address = int(rospy.get_param("~address", "128"))
         if self.address > 0x87 or self.address < 0x80:
             rospy.logfatal("Address out of range")
@@ -167,7 +169,10 @@ class Node:
         # (which causes sync errors) all access to roboclaw from now
         # must be synchronized using this mutually exclusive lock object.
         self.mutex = threading.Lock()
-
+        
+        # filter var
+        self.vel_old = np.array([0.0,0.0])
+        
         self.updater = diagnostic_updater.Updater()
         self.updater.setHardwareID("Roboclaw")
         self.updater.add(diagnostic_updater.
@@ -190,7 +195,11 @@ class Node:
             roboclaw.SpeedM1M2(self.address, 0, 0)
             roboclaw.ResetEncoders(self.address)
 
-        self.MAX_SPEED = float(rospy.get_param("~max_speed", "2.0"))
+        self.MAX_SPEED_LINEAR = float(rospy.get_param("~max_speed_linear", "0.5"))
+        self.MAX_SPEED_ANGULAR = float(rospy.get_param("~max_speed_angular", "0.5"))
+        self.a = float(rospy.get_param("~new_speed_command_weight", "0.8"))
+        if (self.a>1):
+            self.a = 1.0
         self.TICKS_PER_METER = float(rospy.get_param("~ticks_per_meter", "4342.2"))
         self.BASE_WIDTH = float(rospy.get_param("~base_width", "0.315"))
 
@@ -204,7 +213,9 @@ class Node:
         rospy.logdebug("dev %s", dev_name)
         rospy.logdebug("baud %d", baud_rate)
         rospy.logdebug("address %d", self.address)
-        rospy.logdebug("max_speed %f", self.MAX_SPEED)
+        rospy.logdebug("Linear: max_speed %f", self.MAX_SPEED_LINEAR)
+        rospy.logdebug("Angular: max_speed %f", self.MAX_SPEED_ANGULAR)
+        rospy.logdebug("New command weight: %f",self.a)
         rospy.logdebug("ticks_per_meter %f", self.TICKS_PER_METER)
         rospy.logdebug("base_width %f", self.BASE_WIDTH)
 
@@ -217,6 +228,7 @@ class Node:
                 rospy.loginfo("Did not get command for 1 second, stopping")
                 try:
                     with self.mutex:
+                        self.vel_old = np.array([0.0,0.0])
                         roboclaw.ForwardM1(self.address, 0)
                         roboclaw.ForwardM2(self.address, 0)
                 except OSError as e:
@@ -255,24 +267,37 @@ class Node:
     def cmd_vel_callback(self, twist):
         self.last_set_speed_time = rospy.get_rostime()
 
-        linear_x = twist.linear.x
-        if linear_x > self.MAX_SPEED:
-            linear_x = self.MAX_SPEED
-        if linear_x < -self.MAX_SPEED:
-            linear_x = -self.MAX_SPEED
-
+        linear_x = -twist.linear.x
+        angular_z = twist.angular.z
+        
+        # Set speed limits
+        if abs(linear_x) > self.MAX_SPEED_LINEAR:
+            linear_x = np.sign(linear_x)*self.MAX_SPEED_LINEAR    
+        if abs(angular_z)> self.MAX_SPEED_ANGULAR:
+            angular_z = np.sign(angular_z)*self.MAX_SPEED_ANGULAR
+            
+        vel_new = np.array([linear_x, angular_z])
+        self.vel_old = self.a*vel_new + (1.0-self.a)*self.vel_old
+        linear_x, angular_z = self.vel_old[0], self.vel_old[1]
+        
+        print("==== cmd_callback ====")
+        print("> linear: ",linear_x, " | ",self.MAX_SPEED_LINEAR)
+        print("> angular: ",angular_z, " | ",self.MAX_SPEED_ANGULAR)
         vr = linear_x + twist.angular.z * self.BASE_WIDTH / 2.0  # m/s
         vl = linear_x - twist.angular.z * self.BASE_WIDTH / 2.0
-
+        print("--------------------")
+        print("> vr: ",vr)
+        print("> vl: ",vl)
+        print("=======================")
         vr_ticks = int(vr * self.TICKS_PER_METER)  # ticks/s
         vl_ticks = int(vl * self.TICKS_PER_METER)
-
+        
         rospy.logdebug("vr_ticks:%d vl_ticks: %d", vr_ticks, vl_ticks)
-
         try:
             # This is a hack way to keep a poorly tuned PID from making noise at speed 0
-            if vr_ticks is 0 and vl_ticks is 0:
+            if abs(vr_ticks) <= 1e-5 and abs(vl_ticks) <= 1e-5:
                 with self.mutex:
+                    self.vel_old = np.array([0.0,0.0])
                     roboclaw.ForwardM1(self.address, 0)
                     roboclaw.ForwardM2(self.address, 0)
             else:
