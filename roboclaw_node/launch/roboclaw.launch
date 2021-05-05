@@ -6,7 +6,7 @@
     <arg name="address" default="128"/>
     <arg name="max_speed_linear" default="0.05"/>
     <arg name="max_speed_angular" default="0.08"/>
-    <arg name="new_speed_command_weight" default="0.5"/>
+    <arg name="new_speed_command_weight" default="0.8"/>
     <arg name="ticks_per_meter" default="3568.9"/> <!-- 4342.2 -->
     <arg name="base_width" default="0.335"/>
     <arg name="run_diag" default="true"/>

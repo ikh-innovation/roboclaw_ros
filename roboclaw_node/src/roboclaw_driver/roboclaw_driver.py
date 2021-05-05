@@ -1179,5 +1179,5 @@ def ReadPWMMode(address):
 
 def Open(comport, rate):
     global port
-    port = serial.Serial(comport, baudrate=rate, timeout=0.1, interCharTimeout=0.01)
+    port = serial.Serial(comport, baudrate=rate, timeout=0.5, interCharTimeout=0.05)
     return
