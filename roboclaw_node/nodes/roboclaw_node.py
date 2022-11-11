@@ -11,6 +11,7 @@ import tf
 import numpy as np
 from geometry_msgs.msg import Quaternion, Twist
 from nav_msgs.msg import Odometry
+from std_srvs.srv import Trigger, TriggerResponse
 
 __author__ = "bwbazemore@uga.edu (Brad Bazemore)"
 
@@ -21,13 +22,20 @@ class EncoderOdom:
     def __init__(self, ticks_per_meter, base_width):
         self.TICKS_PER_METER = ticks_per_meter
         self.BASE_WIDTH = base_width
-        self.odom_pub = rospy.Publisher('/odom', Odometry, queue_size=10)
+        self.odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
+        self.reset_odom = rospy.Service('reset_odom', Trigger, self.execute_reset_odom)
         self.cur_x = 0
         self.cur_y = 0
         self.cur_theta = 0.0
         self.last_enc_left = 0
         self.last_enc_right = 0
         self.last_enc_time = rospy.Time.now()
+
+    def execute_reset_odom(self, req): 
+        self.cur_x = 0
+        self.cur_y = 0
+        self.cur_theta = 0.0
+        return TriggerResponse(success=True, message="RESET ODOM")
 
     @staticmethod
     def normalize_angle(angle):
@@ -45,7 +53,9 @@ class EncoderOdom:
 
         dist_left = left_ticks / self.TICKS_PER_METER
         dist_right = right_ticks / self.TICKS_PER_METER
-        dist = (dist_right + dist_left) / 2.0
+        # dist = (dist_right + dist_left) / 2.0
+        # add this for one motor testing
+        dist = dist_right
 
         current_time = rospy.Time.now()
         d_time = (current_time - self.last_enc_time).to_sec()
@@ -59,7 +69,9 @@ class EncoderOdom:
         else:
             d_theta = (dist_right - dist_left) / self.BASE_WIDTH
             r = dist / d_theta
-            self.cur_x += r * (sin(d_theta + self.cur_theta) - sin(self.cur_theta))
+            # TODO add this for one motor testing
+            self.cur_x += dist
+            # self.cur_x += r * (sin(d_theta + self.cur_theta) - sin(self.cur_theta))
             self.cur_y -= r * (cos(d_theta + self.cur_theta) - cos(self.cur_theta))
             self.cur_theta = self.normalize_angle(self.cur_theta + d_theta)
 
@@ -75,14 +87,17 @@ class EncoderOdom:
     def update_publish(self, enc_left, enc_right):
         # 2106 per 0.1 seconds is max speed, error in the 16th bit is 32768
         # TODO lets find a better way to deal with this error
-        if abs(enc_left - self.last_enc_left) > 20000:
-            rospy.logerr("Ignoring left encoder jump: cur %d, last %d" % (enc_left, self.last_enc_left))
-        elif abs(enc_right - self.last_enc_right) > 20000:
-            rospy.logerr("Ignoring right encoder jump: cur %d, last %d" % (enc_right, self.last_enc_right))
-        else:
-            vel_x, vel_theta = self.update(enc_left, enc_right)
-            self.publish_odom(-self.cur_x, -self.cur_y, self.cur_theta, -vel_x, vel_theta)
+        # if abs(enc_left - self.last_enc_left) > 20000:
+        #     rospy.logerr("Ignoring left encoder jump: cur %d, last %d" % (enc_left, self.last_enc_left))
+        # elif abs(enc_right - self.last_enc_right) > 20000:
+        #     rospy.logerr("Ignoring right encoder jump: cur %d, last %d" % (enc_right, self.last_enc_right))
+        # else:
+        #     vel_x, vel_theta = self.update(enc_left, enc_right)
+        #     self.publish_odom(-self.cur_x, -self.cur_y, self.cur_theta, -vel_x, vel_theta)
 
+        vel_x, vel_theta = self.update(enc_left, enc_right)
+        self.publish_odom(-self.cur_x, -self.cur_y, self.cur_theta, -vel_x, vel_theta)
+        
     def publish_odom(self, cur_x, cur_y, cur_theta, vx, vth):
         quat = tf.transformations.quaternion_from_euler(0, 0, cur_theta)
         current_time = rospy.Time.now()
@@ -192,7 +207,7 @@ class Node:
             rospy.logdebug(repr(version[1]))
 
         with self.mutex:
-            roboclaw.SpeedM1M2(self.address, 0, 0)
+            # roboclaw.SpeedM1M2(self.address, 0, 0)
             roboclaw.ResetEncoders(self.address)
 
         self.MAX_SPEED_LINEAR = float(rospy.get_param("~max_speed_linear", "0.5"))
@@ -225,7 +240,7 @@ class Node:
         while not rospy.is_shutdown():
 
             if (rospy.get_rostime() - self.last_set_speed_time).to_sec() > 1:
-                rospy.loginfo("Did not get command for 1 second, stopping")
+                # rospy.loginfo("Did not get command for 1 second, stopping")
                 try:
                     with self.mutex:
                         self.vel_old = np.array([0.0,0.0])
@@ -283,8 +298,8 @@ class Node:
         print("==== cmd_callback ====")
         print("> linear: ",linear_x, " | ",self.MAX_SPEED_LINEAR)
         print("> angular: ",angular_z, " | ",self.MAX_SPEED_ANGULAR)
-        vr = linear_x + twist.angular.z * self.BASE_WIDTH / 2.0  # m/s
-        vl = linear_x - twist.angular.z * self.BASE_WIDTH / 2.0
+        vr = linear_x - twist.angular.z * self.BASE_WIDTH / 2.0  # m/s
+        vl = linear_x + twist.angular.z * self.BASE_WIDTH / 2.0
         print("--------------------")
         print("> vr: ",vr)
         print("> vl: ",vl)
@@ -302,6 +317,7 @@ class Node:
                     roboclaw.ForwardM2(self.address, 0)
             else:
                 with self.mutex:
+                    pass
                     roboclaw.SpeedM1M2(self.address, vr_ticks, vl_ticks)
         except OSError as e:
             rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)

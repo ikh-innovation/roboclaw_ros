@@ -4,11 +4,11 @@
     <arg name="dev" default="/dev/ttyACM0"/>
     <arg name="baud" default="115200"/>
     <arg name="address" default="128"/>
-    <arg name="max_speed_linear" default="0.05"/>
-    <arg name="max_speed_angular" default="0.08"/>
+    <arg name="max_speed_linear" default="0.2"/>
+    <arg name="max_speed_angular" default="0.2"/>
     <arg name="new_speed_command_weight" default="0.8"/>
-    <arg name="ticks_per_meter" default="3568.9"/> <!-- 4342.2 -->
-    <arg name="base_width" default="0.335"/>
+    <arg name="ticks_per_meter" default="2664764"/> <!-- 666191 counts (ticks = counts *4) -->
+    <arg name="base_width" default="0.16"/>
     <arg name="run_diag" default="true"/>
 
     <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_node.py" name="roboclaw_node" output="screen">
