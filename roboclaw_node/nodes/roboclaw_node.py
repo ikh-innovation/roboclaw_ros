@@ -46,6 +46,8 @@ class EncoderOdom:
         return angle
 
     def update(self, enc_left, enc_right):
+        # print("enc right: ", enc_right)
+        # print("enc left: ", enc_left)
         left_ticks = enc_left - self.last_enc_left
         right_ticks = enc_right - self.last_enc_right
         self.last_enc_left = enc_left
@@ -70,8 +72,8 @@ class EncoderOdom:
             d_theta = (dist_right - dist_left) / self.BASE_WIDTH
             r = dist / d_theta
             # TODO add this for one motor testing
-            self.cur_x += dist
-            # self.cur_x += r * (sin(d_theta + self.cur_theta) - sin(self.cur_theta))
+            # self.cur_x += dist
+            self.cur_x += r * (sin(d_theta + self.cur_theta) - sin(self.cur_theta))
             self.cur_y -= r * (cos(d_theta + self.cur_theta) - cos(self.cur_theta))
             self.cur_theta = self.normalize_angle(self.cur_theta + d_theta)
 
@@ -95,7 +97,7 @@ class EncoderOdom:
         #     vel_x, vel_theta = self.update(enc_left, enc_right)
         #     self.publish_odom(-self.cur_x, -self.cur_y, self.cur_theta, -vel_x, vel_theta)
 
-        vel_x, vel_theta = self.update(enc_left, enc_right)
+        vel_x, vel_theta = self.update(-enc_left, enc_right)
         self.publish_odom(-self.cur_x, -self.cur_y, self.cur_theta, -vel_x, vel_theta)
         
     def publish_odom(self, cur_x, cur_y, cur_theta, vx, vth):
@@ -282,7 +284,7 @@ class Node:
     def cmd_vel_callback(self, twist):
         self.last_set_speed_time = rospy.get_rostime()
 
-        linear_x = -twist.linear.x
+        linear_x = twist.linear.x
         angular_z = twist.angular.z
         
         # Set speed limits
@@ -298,8 +300,8 @@ class Node:
         print("==== cmd_callback ====")
         print("> linear: ",linear_x, " | ",self.MAX_SPEED_LINEAR)
         print("> angular: ",angular_z, " | ",self.MAX_SPEED_ANGULAR)
-        vr = linear_x - twist.angular.z * self.BASE_WIDTH / 2.0  # m/s
-        vl = linear_x + twist.angular.z * self.BASE_WIDTH / 2.0
+        vr = -(linear_x + twist.angular.z * self.BASE_WIDTH / 2.0)  # m/s
+        vl = (linear_x - twist.angular.z * self.BASE_WIDTH / 2.0)
         print("--------------------")
         print("> vr: ",vr)
         print("> vl: ",vl)
