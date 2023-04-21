@@ -124,7 +124,7 @@ class Node:
     
     def _publish_callback(self,timer):
         # Publish Mean Current Messages
-        if (self._publish_currents):
+        if (self._publish_currents and (self.m1_current_pub.get_num_connections()>0 or self.m2_current_pub.get_num_connections()>0)):
             mean_currents = self.motorCurrents.getMeanM1M2Values()
             msg = FloatStamped()
             msg.header.stamp = rospy.Time.now()
@@ -134,11 +134,11 @@ class Node:
             self.m2_current_pub.publish(msg)
         
         # Read and publish Errors
-        if (self._publish_roboclaw_status):
+        if (self._publish_roboclaw_status and self.status_pub.get_num_connections()>0):
             self.publish_list_of_errors(self.read_list_of_errors())
         
         # Read and publish Temp
-        if (self._publish_roboclaw_temperature):
+        if (self._publish_roboclaw_temperature and self.temp_pub.get_num_connections()>0):
             self.publish_temperature(self.read_temps()/10)
                 
 
