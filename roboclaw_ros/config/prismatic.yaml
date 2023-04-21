@@ -1,0 +1,24 @@
+dev: /dev/ttyACM0 # Device port
+baud: 115200 # Baudrate
+address: 128 # Address defined in the device
+
+# Callbacks Rates:
+rate: 10 # Rate for the update callback (update and calculate values = main loop)
+publish_rate: 5 # Rate to publish the driver status, currents and temperatures (if enabled)
+
+
+# The total output power threshold to identify that the motors are not moving
+# When the node measures lower than this threshold the stop counter is increased
+# If stop_counter reaches the defined max_counter_stop value, then the node stops
+# the motors.
+power_stop_threshold: 0.3
+max_counter_stop: 5 
+# Define the timeout command sent to the motors for safety reasons.
+stop_move_timeout: 20
+# Maximum value is 90! Warning on the motors maximum voltage
+pwm_duty_cycle: 65
+
+# Enable/Disable publishers 
+publish_temperature: true
+publish_status: true
+publish_currents: true
