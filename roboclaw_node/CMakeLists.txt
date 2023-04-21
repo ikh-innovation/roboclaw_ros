@@ -5,11 +5,10 @@ project(roboclaw_node)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
-  nav_msgs
-  roscpp
+  ikh_ros_msgs
   rospy
   std_msgs
+  std_srvs
   tf
 )
 
