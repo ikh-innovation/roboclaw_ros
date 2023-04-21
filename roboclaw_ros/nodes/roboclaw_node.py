@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-import roboclaw_driver.roboclaw_driver as roboclaw
 import rospy
 from ikh_ros_msgs.msg import FloatStamped
 from std_srvs.srv import SetBool
 from std_msgs.msg import String
 import numpy as np
+from roboclaw_ros.roboclaw_driver import Roboclaw
 
 
 class MotorCurrents:
