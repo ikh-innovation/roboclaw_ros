@@ -118,7 +118,7 @@ class Node:
         rate = rospy.get_param("~rate",10.0)
         publish_rate = rospy.get_param("~publish_rate",5.0)
         # Timers
-        self.period = rospy.Duration().from_sec(1/publish_rate)
+        self.period = rospy.Duration().from_sec(1.0/publish_rate)
         self.timer_update_rate = rospy.Duration().from_sec(1.0/rate)
         self.timer1 = rospy.Timer(self.timer_update_rate, self._read_data_callback)
     
