@@ -11,11 +11,11 @@
     <rosparam command="load" file="$(find roboclaw_ros)/config/prismatic.yaml"/>
     <!--Control prismatic motors service -->
     <remap from="move_prismatic" to="$(arg move_prismatic_service_name)"/>
-    <remap from="m1_current" to="$(arg m1_current_topic_name"/>
-    <remap from="m2_current" to="$(arg m2_current_topic_name"/>
-    <remap from="status" to="$(arg status_topic_name"/>
-    <remap from="temperature" to="$(arg temperature_topic_name"/>
-    <remap from="deck_position" to="$(arg deck_position_topic_name"/>
+    <remap from="m1_current" to="$(arg m1_current_topic_name)"/>
+    <remap from="m2_current" to="$(arg m2_current_topic_name)"/>
+    <remap from="status" to="$(arg status_topic_name)"/>
+    <remap from="temperature" to="$(arg temperature_topic_name)"/>
+    <remap from="deck_position" to="$(arg deck_position_topic_name)"/>
 </node>
 
 </launch>
