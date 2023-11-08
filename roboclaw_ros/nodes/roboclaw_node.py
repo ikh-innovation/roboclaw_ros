@@ -152,9 +152,9 @@ class Node:
         mean_currents = self.motorCurrents.getMeanM1M2Values()
         
         # Calculate Output power
-        sum_of_means = mean_currents[0]+mean_currents[1]
-        sum_of_means /= 100
-        self.outputpower = sum_of_means*sum_of_means
+        sum_of_means = (mean_currents[0]*mean_currents[0])+(mean_currents[1]*mean_currents[1])
+        self.outputpower = sum_of_means/10000.0
+        print(self.outputpower)
         
         
 

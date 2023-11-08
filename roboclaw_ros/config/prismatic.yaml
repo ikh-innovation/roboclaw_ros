@@ -1,4 +1,4 @@
-dev: /dev/ttyACM0 # Device port
+dev: /dev/ttyROBOCLAW # Device port
 baud: 115200 # Baudrate
 address: 128 # Address defined in the device
 

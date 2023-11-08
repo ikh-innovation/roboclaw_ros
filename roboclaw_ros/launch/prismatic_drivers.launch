@@ -7,7 +7,7 @@
 <arg name="temperature_topic_name" default="temperature"/>
 <arg name="deck_position_topic_name" default="deck_position"/>
 
-<node pkg="roboclaw_ros" type="roboclaw_node.py" name="prismatic_driver_node" respawn="true">
+<node pkg="roboclaw_ros" type="roboclaw_node.py" name="prismatic_driver_node" respawn="true" output="screen"> 
     <rosparam command="load" file="$(find roboclaw_ros)/config/prismatic.yaml"/>
     <!--Control prismatic motors service -->
     <remap from="move_prismatic" to="$(arg move_prismatic_service_name)"/>
