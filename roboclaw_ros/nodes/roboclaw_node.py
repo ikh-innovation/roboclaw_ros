@@ -115,8 +115,11 @@ class Node:
         self._publish_roboclaw_temperature = rospy.get_param("~publish_temperature", True)
         self._publish_roboclaw_status = rospy.get_param("~publish_status", True)
         self._publish_currents = rospy.get_param("~publish_currents", True)
+        self._stop_with_time = rospy.get_param("~stop_with_time",False)
+        self._stop_with_time_seconds = rospy.get_param("~stop_with_time_seconds",10.0)
         rate = rospy.get_param("~rate",10.0)
         publish_rate = rospy.get_param("~publish_rate",5.0)
+        self._deck_state = None
         # Timers
         self.period = rospy.Duration().from_sec(1.0/publish_rate)
         self.timer_update_rate = rospy.Duration().from_sec(1.0/rate)
@@ -154,7 +157,6 @@ class Node:
         # Calculate Output power
         sum_of_means = (mean_currents[0]*mean_currents[0])+(mean_currents[1]*mean_currents[1])
         self.outputpower = sum_of_means/10000.0
-        print(self.outputpower)
         
         
 
@@ -254,7 +256,8 @@ class Node:
 
     def update_deck_state(self, cmd):
         msg = String()
-        if (cmd):
+        self._deck_state = cmd
+        if (cmd): 
             msg.data = "down"
             self.deck_position_pub.publish(msg)
         else:
@@ -264,6 +267,10 @@ class Node:
     def roboclaw_control(self, cmd):
         time_stared = rospy.Time.now().to_sec()
         if (not self.is_running):
+            
+            if (cmd == self._deck_state):
+                return (True, "Deck Already in this position")
+            
             if (cmd):
                 rospy.logwarn("- Deck goes to lower position")
                 self.is_running = True
@@ -290,8 +297,16 @@ class Node:
                 self.send_zero_commands()
                 return (False, "Timeout reached!")
             
+            # Stop only with time
+            elif (self._stop_with_time and duration>=self._stop_with_time_seconds):
+                rospy.sleep(1)
+                self.send_zero_commands()
+                self.update_deck_state(cmd)
+                return (True,"Position Reached")
+                
+            
             # if duration > 2 secs and the total output power is lower than threshold the motor stops
-            elif ((duration > 2) and (self.outputpower < self._power_stop_threshold)):
+            elif ((duration > 2) and (self.outputpower < self._power_stop_threshold) and (not self._stop_with_time)):
                 cnt += 1
                 if (cnt > self._max_cnt_to_stop):
                     rospy.sleep(1)
@@ -300,6 +315,9 @@ class Node:
                     # update state
                     self.update_deck_state(cmd)
                     return (True, "Position Reached")
+            
+            
+                
                 
             rospy.sleep(self.timer_update_rate.to_sec())
 
