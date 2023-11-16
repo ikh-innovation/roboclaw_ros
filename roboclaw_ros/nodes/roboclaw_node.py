@@ -117,6 +117,7 @@ class Node:
         self._publish_currents = rospy.get_param("~publish_currents", True)
         self._stop_with_time = rospy.get_param("~stop_with_time",False)
         self._stop_with_time_seconds = rospy.get_param("~stop_with_time_seconds",10.0)
+        self._inverted_logic = rospy.get_param("~service_inverted_logic",False)
         rate = rospy.get_param("~rate",10.0)
         publish_rate = rospy.get_param("~publish_rate",5.0)
         self._deck_state = None
@@ -243,6 +244,8 @@ class Node:
 
     def deck_control_cb(self, req):
         res = (False, "Nothing")
+        if (self._inverted_logic):
+            req.data = not(req.data)
         if req.data:
             res = self.roboclaw_control(1)
         else:

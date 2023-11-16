@@ -24,3 +24,6 @@ pwm_duty_cycle: 80
 publish_temperature: true
 publish_status: true
 publish_currents: true
+
+# Inverted logic
+service_inverted_logic: true
