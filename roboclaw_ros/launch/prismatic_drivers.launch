@@ -1,14 +1,17 @@
 <?xml version="1.0"?>
 <launch>
+<arg name="driver_port" default="/dev/ttyROBOCLAW"/>
 <arg name="move_prismatic_service_name" default="move_prismatic"/>
 <arg name="m1_current_topic_name" default="m1_current"/>
 <arg name="m2_current_topic_name" default="m2_current"/>
 <arg name="status_topic_name" default="status"/>
 <arg name="temperature_topic_name" default="temperature"/>
 <arg name="deck_position_topic_name" default="deck_position"/>
+<arg name="config_dir" default="$(find roboclaw_ros)/config/prismatic.yaml"/>
+
 
 <node pkg="roboclaw_ros" type="roboclaw_node.py" name="prismatic_driver_node" respawn="true" output="screen"> 
-    <rosparam command="load" file="$(find roboclaw_ros)/config/prismatic.yaml"/>
+    <rosparam command="load" file="$(arg config_dir)" subst_value="true"/>
     <!--Control prismatic motors service -->
     <remap from="move_prismatic" to="$(arg move_prismatic_service_name)"/>
     <remap from="m1_current" to="$(arg m1_current_topic_name)"/>
