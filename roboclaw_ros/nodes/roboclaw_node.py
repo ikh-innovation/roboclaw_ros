@@ -59,7 +59,7 @@ class MotorCurrents:
 
 class Node:
     def __init__(self):
-        rospy.init_node("roboclaw_node")
+        
         # rospy.on_shutdown(self.shutdown)
         rospy.loginfo("Connecting to roboclaw")
         self.dev_name = rospy.get_param("~dev", "/dev/ttyACM0")
@@ -68,7 +68,7 @@ class Node:
 
         # Parameter to indicate that the motors are running.
         self.is_running = False
-
+        rospy.sleep(2)
         # Check port permissions
         if (self.port_permissions(self.dev_name)):
             rospy.loginfo("Port permissions are acceptable.")
@@ -80,7 +80,7 @@ class Node:
                 rospy.logerr("cannot achieved")
                 exit(-1)
             rospy.loginfo("Permissions are now ok!")
-
+        rospy.sleep(2)
         # Create a roboclaw instance
         self.roboclaw = Roboclaw(self.dev_name, self.baud_rate)
 
@@ -327,6 +327,7 @@ class Node:
 
 if __name__ == "__main__":
     try:
+        rospy.init_node("roboclaw_node")
         node = Node()
         node.run()
     except rospy.ROSInterruptException:
