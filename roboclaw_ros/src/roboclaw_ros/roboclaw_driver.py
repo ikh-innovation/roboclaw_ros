@@ -238,6 +238,7 @@ class Roboclaw:
                     return (1, val1[1])
             trys -= 1
             if trys == 0:
+                #print("READ BREAK {}".format(trys))
                 break
         return (0, 0)
 
@@ -255,6 +256,7 @@ class Roboclaw:
                     return (1, val1[1])
             trys -= 1
             if trys == 0:
+                #print("READ BREAK {}".format(trys))
                 break
         return (0, 0)
 
@@ -272,6 +274,7 @@ class Roboclaw:
                     return (1, val1[1])
             trys -= 1
             if trys == 0:
+                #print("READ BREAK {}".format(trys))
                 break
         return (0, 0)
 
@@ -291,6 +294,7 @@ class Roboclaw:
                         return (1, val1[1], val2[1])
             trys -= 1
             if trys == 0:
+                #print("READ BREAK {}".format(trys))
                 break
         return (0, 0)
 
@@ -1006,11 +1010,14 @@ class Roboclaw:
 
     def ReadErrorDecoded(self, address):
         x, out = self._read4(address, self.Cmd.GETERROR)
-        list_of_errors = []
-        for _error in RoboclawStatusMasks.keys():
-            if (int(out) & RoboclawStatusMasks[_error]):
-                list_of_errors.append(_error)
-        return list_of_errors
+        if(x):
+            list_of_errors = []
+            for _error in RoboclawStatusMasks.keys():
+                if (int(out) & RoboclawStatusMasks[_error]):
+                    list_of_errors.append(_error)
+            return list_of_errors
+        else:
+            return None
 
     def ReadEncoderModes(self, address):
         val = self._read2(address, self.Cmd.GETENCODERMODE)
@@ -1103,7 +1110,7 @@ class Roboclaw:
     def Open(self):
         try:
             self._port = serial.Serial(
-                port=self.comport, baudrate=self.rate, timeout=1, interCharTimeout=self.timeout)
+                port=self.comport, baudrate=self.rate, timeout=0.2, interCharTimeout=self.timeout)
         except:
             return 0
         return 1

@@ -2,7 +2,7 @@
 import rospy
 from ikh_ros_msgs.msg import FloatStamped
 from std_srvs.srv import SetBool
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32MultiArray
 import numpy as np
 from roboclaw_ros.roboclaw_driver import Roboclaw
 
@@ -82,7 +82,7 @@ class Node:
             rospy.loginfo("Permissions are now ok!")
         rospy.sleep(2)
         # Create a roboclaw instance
-        self.roboclaw = Roboclaw(self.dev_name, self.baud_rate)
+        self.roboclaw = Roboclaw(self.dev_name, self.baud_rate,timeout=0.02,retries=1)
 
         # Open roboclaw port and check version
         self.open_roboclaw_port()
@@ -94,8 +94,9 @@ class Node:
             'm2_current', FloatStamped, queue_size=10)
         self.deck_position_pub = rospy.Publisher(
             'deck_position', String, queue_size=10, latch=True)
-        self.status_pub = rospy.Publisher('status', String, queue_size=10)
-        self.temp_pub = rospy.Publisher('temperature', FloatStamped, queue_size=10)
+        self.status_pub = rospy.Publisher('status', String, queue_size=5)
+        self.temp_pub = rospy.Publisher('temperature', FloatStamped, queue_size=5)
+        self._pwms = rospy.Publisher('pwm', Float32MultiArray, queue_size=5)
 
         self.current_msg = FloatStamped()
 
@@ -139,25 +140,45 @@ class Node:
         
         # Read and publish Errors
         if (self._publish_roboclaw_status and self.status_pub.get_num_connections()>0):
-            self.publish_list_of_errors(self.read_list_of_errors())
+            res = self.read_list_of_errors()
+            if (res!=None):
+                self.publish_list_of_errors(res)
         
         # Read and publish Temp
         if (self._publish_roboclaw_temperature and self.temp_pub.get_num_connections()>0):
-            self.publish_temperature(self.read_temps()/10)
+            res = self.read_temps()
+            if (res!=None):
+                self.publish_temperature(res/10)
+        
+        if (self._pwms.get_num_connections()>0):
+            pwms = self.roboclaw.ReadPWMs(self.address)
+            if (pwms[0]):
+                msg = Float32MultiArray()
+                #tick = rospy.Time.now().to_sec()
+                #print("Time to read PWMs: {}".format(rospy.Time.now().to_sec()-tick))
+                msg.data.append(pwms[1])
+                msg.data.append(pwms[2])
+                self._pwms.publish(msg)
+            
                 
 
     def _read_data_callback(self, timer):
         # Read and append currents to the current instance
-        m1_current, m2_current = self.read_currents()
-        self.motorCurrents.appendM1(m1_current)
-        self.motorCurrents.appendM2(m2_current)
+        #tick = rospy.Time.now().to_sec()
+        res = self.read_currents()
+        if (res!=None):
+            m1_current, m2_current = res
+            #print("Time to read Currents: {}".format(rospy.Time.now().to_sec()-tick))
+            self.motorCurrents.appendM1(m1_current)
+            self.motorCurrents.appendM2(m2_current)
         
-        # get mean of motors current values
-        mean_currents = self.motorCurrents.getMeanM1M2Values()
+            # get mean of motors current values
         
-        # Calculate Output power
-        sum_of_means = (mean_currents[0]*mean_currents[0])+(mean_currents[1]*mean_currents[1])
-        self.outputpower = sum_of_means/10000.0
+            mean_currents = self.motorCurrents.getMeanM1M2Values()
+        
+            # Calculate Output power
+            sum_of_means = (mean_currents[0]*mean_currents[0])+(mean_currents[1]*mean_currents[1])
+            self.outputpower = sum_of_means/10000.0
         
         
 
@@ -222,23 +243,34 @@ class Node:
 
     def read_list_of_errors(self):
         try:
-            
-            return self.roboclaw.ReadErrorDecoded(self.address)
+            #tick = rospy.Time.now().to_sec()
+            lst = self.roboclaw.ReadErrorDecoded(self.address)
+            #print("Time to read Status: {}".format(rospy.Time.now().to_sec()-tick))
+            if (lst!=None):
+                return lst
+            else:
+                return None
         except:
             raise Exception("Cannot read roboclaw errors")
 
     def read_temps(self):
         try:
             temp1, temp2 = self.roboclaw.ReadTemp(self.address)
-            return temp2
+            if (temp1):
+                return temp2
+            else:
+                return None
         except:
             raise Exception("Cannot read roboclaw errors")
     
     def read_currents(self):
         try:
-            _none, m1_current, m2_current = self.roboclaw.ReadCurrents(
+            _cr, m1_current, m2_current = self.roboclaw.ReadCurrents(
             self.address)
-            return (m1_current, m2_current)
+            if (_cr):
+                return (m1_current, m2_current)
+            else:
+                return None
         except:
             raise Exception("Cannot read roboclaw motor currents")
 
@@ -256,6 +288,13 @@ class Node:
         self.is_running = False
         self.roboclaw.ForwardM1(self.address, 0)
         self.roboclaw.ForwardM2(self.address, 0)
+        rospy.sleep(0.1)
+        self.roboclaw.ForwardM1(self.address, 0)
+        self.roboclaw.ForwardM2(self.address, 0)
+        rospy.sleep(0.1)
+        self.roboclaw.ForwardM1(self.address, 0)
+        self.roboclaw.ForwardM2(self.address, 0)
+
 
     def update_deck_state(self, cmd):
         msg = String()
@@ -280,6 +319,7 @@ class Node:
                 self.roboclaw.BackwardM1(
                     self.address, int(self._pwm_duty_cicle*1.055))
                 self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
+
             else:
                 rospy.logwarn("- Deck goes to upper position")
                 self.is_running = True
@@ -318,6 +358,21 @@ class Node:
                     # update state
                     self.update_deck_state(cmd)
                     return (True, "Position Reached")
+            
+            else:
+                if (cmd):
+                    rospy.logwarn("- Deck goes to lower position")
+                    self.is_running = True
+                    self.roboclaw.BackwardM1(
+                        self.address, int(self._pwm_duty_cicle*1.055))
+                    self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
+
+                else:
+                    rospy.logwarn("- Deck goes to upper position")
+                    self.is_running = True
+                    self.roboclaw.ForwardM1(
+                        self.address, int(self._pwm_duty_cicle*1.055))
+                    self.roboclaw.ForwardM2(self.address, self._pwm_duty_cicle)
             
             
                 
