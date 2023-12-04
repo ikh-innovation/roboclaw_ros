@@ -6,6 +6,7 @@ from std_msgs.msg import String, Float32MultiArray
 import numpy as np
 from roboclaw_ros.roboclaw_driver import Roboclaw
 
+from threading import Lock
 
 class MotorCurrents:
     def __init__(self):
@@ -59,7 +60,7 @@ class MotorCurrents:
 
 class Node:
     def __init__(self):
-        
+        self.serial_lock = Lock()
         # rospy.on_shutdown(self.shutdown)
         rospy.loginfo("Connecting to roboclaw")
         self.dev_name = rospy.get_param("~dev", "/dev/ttyACM0")
@@ -139,6 +140,7 @@ class Node:
             self.m2_current_pub.publish(msg)
         
         # Read and publish Errors
+        self.serial_lock.acquire()
         if (self._publish_roboclaw_status and self.status_pub.get_num_connections()>0):
             res = self.read_list_of_errors()
             if (res!=None):
@@ -159,13 +161,18 @@ class Node:
                 msg.data.append(pwms[1])
                 msg.data.append(pwms[2])
                 self._pwms.publish(msg)
-            
+        
+        if(self.serial_lock.locked()):
+            self.serial_lock.release()
                 
 
     def _read_data_callback(self, timer):
         # Read and append currents to the current instance
         #tick = rospy.Time.now().to_sec()
+        self.serial_lock.acquire()
         res = self.read_currents()
+        if(self.serial_lock.locked()):
+            self.serial_lock.release()
         if (res!=None):
             m1_current, m2_current = res
             #print("Time to read Currents: {}".format(rospy.Time.now().to_sec()-tick))
@@ -285,6 +292,7 @@ class Node:
         return res
 
     def send_zero_commands(self):
+        self.serial_lock.acquire()
         self.is_running = False
         self.roboclaw.ForwardM1(self.address, 0)
         self.roboclaw.ForwardM2(self.address, 0)
@@ -294,6 +302,8 @@ class Node:
         rospy.sleep(0.1)
         self.roboclaw.ForwardM1(self.address, 0)
         self.roboclaw.ForwardM2(self.address, 0)
+        if (self.serial_lock.locked()):
+            self.serial_lock.release()
 
 
     def update_deck_state(self, cmd):
@@ -316,16 +326,22 @@ class Node:
             if (cmd):
                 rospy.logwarn("- Deck goes to lower position")
                 self.is_running = True
+                self.serial_lock.acquire()
                 self.roboclaw.BackwardM1(
                     self.address, int(self._pwm_duty_cicle*1.055))
                 self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
+                if (self.serial_lock.locked()):
+                    self.serial_lock.release()
 
             else:
                 rospy.logwarn("- Deck goes to upper position")
                 self.is_running = True
+                self.serial_lock.acquire()
                 self.roboclaw.ForwardM1(
                     self.address, int(self._pwm_duty_cicle*1.055))
                 self.roboclaw.ForwardM2(self.address, self._pwm_duty_cicle)
+                if (self.serial_lock.locked()):
+                    self.serial_lock.release()
         else:
             return (False, "An other command is ongoing! Try later.")
 
@@ -363,16 +379,22 @@ class Node:
                 if (cmd):
                     rospy.logwarn("- Deck goes to lower position")
                     self.is_running = True
+                    self.serial_lock.acquire()
                     self.roboclaw.BackwardM1(
                         self.address, int(self._pwm_duty_cicle*1.055))
                     self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
+                    if (self.serial_lock.locked()):
+                        self.serial_lock.release()
 
                 else:
                     rospy.logwarn("- Deck goes to upper position")
                     self.is_running = True
+                    self.serial_lock.acquire()
                     self.roboclaw.ForwardM1(
                         self.address, int(self._pwm_duty_cicle*1.055))
                     self.roboclaw.ForwardM2(self.address, self._pwm_duty_cicle)
+                    if (self.serial_lock.locked()):
+                        self.serial_lock.release()
             
             
                 
