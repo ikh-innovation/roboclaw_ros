@@ -309,11 +309,13 @@ class Node:
     def update_deck_state(self, cmd):
         msg = String()
         self._deck_state = cmd
-        if (cmd): 
+        if (cmd):
+            rospy.set_param("deck/state",0) 
             msg.data = "down"
             self.deck_position_pub.publish(msg)
         else:
             msg.data = "up"
+            rospy.set_param("deck/state",1)
             self.deck_position_pub.publish(msg)
 
     def roboclaw_control(self, cmd):
