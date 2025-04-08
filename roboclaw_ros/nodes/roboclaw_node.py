@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import rospy
 from ikh_ros_msgs.msg import FloatStamped
+from actionlib import SimpleActionClient, SimpleActionServer
+from ikh_ros_msgs.msg import MovePrismaticAction, MovePrismaticFeedback, MovePrismaticResult, MovePrismaticGoal
 from std_srvs.srv import SetBool
 from std_msgs.msg import String, Float32MultiArray
 import numpy as np
@@ -89,6 +91,11 @@ class Node:
         self.open_roboclaw_port()
 
         # Topics
+        self.m1_current_last_pub = rospy.Publisher(
+            'm1_current_last', FloatStamped, queue_size=10)
+        self.m2_current_last_pub = rospy.Publisher(
+            'm2_current_last', FloatStamped, queue_size=10)
+        
         self.m1_current_pub = rospy.Publisher(
             'm1_current', FloatStamped, queue_size=10)
         self.m2_current_pub = rospy.Publisher(
@@ -107,6 +114,15 @@ class Node:
         # Services
         self.deck_control_srv = rospy.Service(
             'move_prismatic', SetBool, self.deck_control_cb)
+        
+        # Actions
+        self.action_server = SimpleActionServer(
+            'move_prismatic_action',
+            MovePrismaticAction,
+            execute_cb=self.execute_action_cb,
+            auto_start=False
+        )
+        self.action_server.start()
 
         self.outputpower = 0.0
         # params
@@ -138,6 +154,15 @@ class Node:
             self.m1_current_pub.publish(msg)
             msg.data = mean_currents[1]
             self.m2_current_pub.publish(msg)
+            
+            # ! ADDED FOR DEBUGGING:
+            current_1_last = self.motorCurrents.getM1()
+            current_2_last = self.motorCurrents.getM2()
+            msg.data = current_1_last[-1]
+            self.m1_current_last_pub.publish(msg)
+            msg.data = current_2_last[-1]
+            self.m2_current_last_pub.publish(msg)
+            # ! ADDED FOR DEBUGGING
         
         # Read and publish Errors
         self.serial_lock.acquire()
@@ -282,14 +307,48 @@ class Node:
             raise Exception("Cannot read roboclaw motor currents")
 
     def deck_control_cb(self, req):
-        res = (False, "Nothing")
-        if (self._inverted_logic):
-            req.data = not(req.data)
-        if req.data:
-            res = self.roboclaw_control(1)
-        else:
-            res = self.roboclaw_control(0)
-        return res
+        # res = (False, "Nothing")
+        # if (self._inverted_logic):
+        #     req.data = not(req.data)
+        # if req.data:
+        #     res = self.roboclaw_control(1)
+        # else:
+        #     res = self.roboclaw_control(0)
+        # return res
+        
+        try:
+            # Invert logic if necessary
+            if self._inverted_logic:
+                req.data = not req.data
+
+            # Create an action client
+            client = SimpleActionClient('move_prismatic_action', MovePrismaticAction)
+
+            # Wait for the action server to be available
+            client.wait_for_server(timeout=rospy.Duration(5.0))  # 5-second timeout
+
+            # Send the goal
+            goal = MovePrismaticGoal()
+            goal.position = req.data
+            client.send_goal(goal)
+
+            # Wait for the result with a timeout
+            if not client.wait_for_result(timeout=rospy.Duration(20.0)):  # 20-second timeout
+                rospy.logerr("Action server did not respond in time")
+                return (False, "Action server timeout")
+
+            # Get the result
+            result = client.get_result()
+
+            # Return the result as a service response
+            return (result.success, result.message)
+
+        except rospy.ROSException as e:
+            rospy.logerr("ROS Exception in deck_control_cb: %s" % str(e))
+            return (False, "ROS Exception: %s" % str(e))
+        except Exception as e:
+            rospy.logerr("Unexpected error in deck_control_cb: %s" % str(e))
+            return (False, "Unexpected error: %s" % str(e))
 
     def send_zero_commands(self):
         self.serial_lock.acquire()
@@ -403,6 +462,105 @@ class Node:
                 
             rospy.sleep(self.timer_update_rate.to_sec())
 
+    def execute_action_cb(self, goal):
+        feedback = MovePrismaticFeedback()
+        result = MovePrismaticResult()
+
+        try:
+            # Call roboclaw_control with the goal position
+            cmd = goal.position
+            time_started = rospy.Time.now().to_sec()
+            cnt = 0
+
+            if self.is_running:
+                result.success = False
+                result.message = "Another command is ongoing! Try later."
+                self.action_server.set_aborted(result)
+                return
+
+            if cmd == self._deck_state:
+                result.success = True
+                result.message = "Deck already in this position."
+                self.action_server.set_succeeded(result)
+                return
+
+            rospy.logwarn("- Deck goes to %s position" % ("lower" if cmd else "upper"))
+            self.is_running = True
+
+            while not rospy.is_shutdown():
+                # Check for preemption
+                if self.action_server.is_preempt_requested():
+                    rospy.logwarn("Preemption requested. Stopping the operation.")
+                    self.send_zero_commands()  # Stop the motors
+                    result.success = False
+                    result.message = "Operation preempted by another goal."
+                    self.action_server.set_preempted(result)
+                    self.is_running = False
+                    return
+
+                duration = rospy.Time.now().to_sec() - time_started
+
+                # Continuously send motor commands
+                self.serial_lock.acquire()
+                if cmd:
+                    self.roboclaw.BackwardM1(self.address, int(self._pwm_duty_cicle * 1.055))
+                    self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
+                else:
+                    self.roboclaw.ForwardM1(self.address, int(self._pwm_duty_cicle * 1.055))
+                    self.roboclaw.ForwardM2(self.address, self._pwm_duty_cicle)
+                if self.serial_lock.locked():
+                    self.serial_lock.release()
+
+                # Publish feedback
+                feedback.power_output = self.outputpower
+                feedback.iterations = cnt
+                feedback.duration = duration
+                self.action_server.publish_feedback(feedback)
+
+                # Timeout
+                if duration > self._stop_move_timeout:
+                    self.send_zero_commands()
+                    result.success = False
+                    result.message = "Timeout reached!"
+                    self.action_server.set_aborted(result)
+                    return
+
+                # Stop with time
+                elif self._stop_with_time and duration >= self._stop_with_time_seconds:
+                    rospy.sleep(1)
+                    self.send_zero_commands()
+                    self.update_deck_state(cmd)
+                    result.success = True
+                    result.message = "Position reached."
+                    self.action_server.set_succeeded(result)
+                    return
+
+                # Stop based on power threshold
+                elif duration > 2 and self.outputpower < self._power_stop_threshold and not self._stop_with_time:
+                    cnt += 1
+                    if cnt > self._max_cnt_to_stop:
+                        rospy.sleep(1)
+                        self.send_zero_commands()
+                        self.update_deck_state(cmd)
+                        result.success = True
+                        result.message = "Position reached."
+                        self.action_server.set_succeeded(result)
+                        return
+
+                rospy.sleep(self.timer_update_rate.to_sec())
+
+            # If shutdown is triggered
+            self.send_zero_commands()
+            result.success = False
+            result.message = "Operation interrupted by shutdown."
+            self.action_server.set_aborted(result)
+
+        except Exception as e:
+            rospy.logerr("Unexpected error in execute_action_cb: %s" % str(e))
+            self.send_zero_commands()
+            result.success = False
+            result.message = "Unexpected error: %s" % str(e)
+            self.action_server.set_aborted(result)
 
 if __name__ == "__main__":
     try:
