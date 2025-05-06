@@ -115,7 +115,7 @@ class Node:
         self.deck_control_srv = rospy.Service(
             'move_prismatic', SetBool, self.deck_control_cb)
         
-        # Actions
+        # Action Server
         self.action_server = SimpleActionServer(
             'move_prismatic_action',
             MovePrismaticAction,
@@ -156,12 +156,12 @@ class Node:
             self.m2_current_pub.publish(msg)
             
             # ! ADDED FOR DEBUGGING:
-            current_1_last = self.motorCurrents.getM1()
-            current_2_last = self.motorCurrents.getM2()
-            msg.data = current_1_last[-1]
-            self.m1_current_last_pub.publish(msg)
-            msg.data = current_2_last[-1]
-            self.m2_current_last_pub.publish(msg)
+            # current_1_last = self.motorCurrents.getM1()
+            # current_2_last = self.motorCurrents.getM2()
+            # msg.data = current_1_last[-1]
+            # self.m1_current_last_pub.publish(msg)
+            # msg.data = current_2_last[-1]
+            # self.m2_current_last_pub.publish(msg)
             # ! ADDED FOR DEBUGGING
         
         # Read and publish Errors
@@ -212,10 +212,6 @@ class Node:
             sum_of_means = (mean_currents[0]*mean_currents[0])+(mean_currents[1]*mean_currents[1])
             self.outputpower = sum_of_means/10000.0
         
-        
-
-        
-
     def open_roboclaw_port(self):
         rospy.loginfo('Roboclaw Node: Try to open port...')
         try:
@@ -307,15 +303,6 @@ class Node:
             raise Exception("Cannot read roboclaw motor currents")
 
     def deck_control_cb(self, req):
-        # res = (False, "Nothing")
-        # if (self._inverted_logic):
-        #     req.data = not(req.data)
-        # if req.data:
-        #     res = self.roboclaw_control(1)
-        # else:
-        #     res = self.roboclaw_control(0)
-        # return res
-        
         try:
             # Invert logic if necessary
             if self._inverted_logic:
@@ -376,91 +363,6 @@ class Node:
             msg.data = "up"
             rospy.set_param("deck/state",1)
             self.deck_position_pub.publish(msg)
-
-    def roboclaw_control(self, cmd):
-        time_stared = rospy.Time.now().to_sec()
-        if (not self.is_running):
-            
-            if (cmd == self._deck_state):
-                return (True, "Deck Already in this position")
-            
-            if (cmd):
-                rospy.logwarn("- Deck goes to lower position")
-                self.is_running = True
-                self.serial_lock.acquire()
-                self.roboclaw.BackwardM1(
-                    self.address, int(self._pwm_duty_cicle*1.055))
-                self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
-                if (self.serial_lock.locked()):
-                    self.serial_lock.release()
-
-            else:
-                rospy.logwarn("- Deck goes to upper position")
-                self.is_running = True
-                self.serial_lock.acquire()
-                self.roboclaw.ForwardM1(
-                    self.address, int(self._pwm_duty_cicle*1.055))
-                self.roboclaw.ForwardM2(self.address, self._pwm_duty_cicle)
-                if (self.serial_lock.locked()):
-                    self.serial_lock.release()
-        else:
-            return (False, "An other command is ongoing! Try later.")
-
-        cnt = 0
-
-        while (not rospy.is_shutdown()):
-
-            duration = rospy.Time.now().to_sec()-time_stared
-            
-            # if timeout excited then stop motors and return false with the related message
-            if (duration > self._stop_move_timeout):
-                self.send_zero_commands()
-                return (False, "Timeout reached!")
-            
-            # Stop only with time
-            elif (self._stop_with_time and duration>=self._stop_with_time_seconds):
-                rospy.sleep(1)
-                self.send_zero_commands()
-                self.update_deck_state(cmd)
-                return (True,"Position Reached")
-                
-            
-            # if duration > 2 secs and the total output power is lower than threshold the motor stops
-            elif ((duration > 2) and (self.outputpower < self._power_stop_threshold) and (not self._stop_with_time)):
-                cnt += 1
-                if (cnt > self._max_cnt_to_stop):
-                    rospy.sleep(1)
-                    # stop motors
-                    self.send_zero_commands()
-                    # update state
-                    self.update_deck_state(cmd)
-                    return (True, "Position Reached")
-            
-            else:
-                if (cmd):
-                    rospy.logwarn("- Deck goes to lower position")
-                    self.is_running = True
-                    self.serial_lock.acquire()
-                    self.roboclaw.BackwardM1(
-                        self.address, int(self._pwm_duty_cicle*1.055))
-                    self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
-                    if (self.serial_lock.locked()):
-                        self.serial_lock.release()
-
-                else:
-                    rospy.logwarn("- Deck goes to upper position")
-                    self.is_running = True
-                    self.serial_lock.acquire()
-                    self.roboclaw.ForwardM1(
-                        self.address, int(self._pwm_duty_cicle*1.055))
-                    self.roboclaw.ForwardM2(self.address, self._pwm_duty_cicle)
-                    if (self.serial_lock.locked()):
-                        self.serial_lock.release()
-            
-            
-                
-                
-            rospy.sleep(self.timer_update_rate.to_sec())
 
     def execute_action_cb(self, goal):
         feedback = MovePrismaticFeedback()
