@@ -9,7 +9,7 @@ import numpy as np
 from roboclaw_ros.roboclaw_driver import Roboclaw
 
 from threading import Lock
-
+from enum import Enum
 class MotorCurrents:
     def __init__(self):
         self._bufferSize = 10
@@ -59,6 +59,10 @@ class MotorCurrents:
     def getM2(self):
         return self.m2
 
+class DeckState(Enum):
+    UNDEFINED = -1
+    UP = 1
+    DOWN = 0
 
 class Node:
     def __init__(self):
@@ -136,9 +140,12 @@ class Node:
         self._stop_with_time = rospy.get_param("~stop_with_time",False)
         self._stop_with_time_seconds = rospy.get_param("~stop_with_time_seconds",10.0)
         self._inverted_logic = rospy.get_param("~service_inverted_logic",False)
+        self._ce_block_enabled = rospy.get_param("mower/ce_block_enabled",False)
+        self._emergency_enabled = rospy.get_param("mower/emergency_stop",False)
         rate = rospy.get_param("~rate",10.0)
         publish_rate = rospy.get_param("~publish_rate",5.0)
-        self._deck_state = None
+        self._deck_state = DeckState.UNDEFINED
+        rospy.set_param("deck/state", DeckState.UNDEFINED.value)
         # Timers
         self.period = rospy.Duration().from_sec(1.0/publish_rate)
         self.timer_update_rate = rospy.Duration().from_sec(1.0/rate)
@@ -307,7 +314,7 @@ class Node:
             # Invert logic if necessary
             if self._inverted_logic:
                 req.data = not req.data
-
+            
             # Create an action client
             client = SimpleActionClient('move_prismatic_action', MovePrismaticAction)
 
@@ -353,47 +360,68 @@ class Node:
 
 
     def update_deck_state(self, cmd):
+        rospy.loginfo("Updating deck state to: %s" % cmd.name) 
         msg = String()
-        self._deck_state = cmd
-        if (cmd):
-            rospy.set_param("deck/state",0) 
-            msg.data = "down"
-            self.deck_position_pub.publish(msg)
-        else:
-            msg.data = "up"
-            rospy.set_param("deck/state",1)
-            self.deck_position_pub.publish(msg)
+        if cmd == DeckState.UNDEFINED:
+            self._deck_state = DeckState.UNDEFINED
+            rospy.set_param("deck/state", DeckState.UNDEFINED.value)
+            msg.data = cmd.name
+        elif cmd == DeckState.DOWN:
+            self._deck_state = DeckState.DOWN
+            rospy.set_param("deck/state",  DeckState.DOWN.value)
+            msg.data = cmd.name
+        elif cmd == DeckState.UP:
+            self._deck_state = DeckState.UP
+            rospy.set_param("deck/state", DeckState.UP.value)
+            msg.data = cmd.name
+        self.deck_position_pub.publish(msg)
 
     def execute_action_cb(self, goal):
         feedback = MovePrismaticFeedback()
         result = MovePrismaticResult()
 
-        try:
+        try:        
             # Call roboclaw_control with the goal position
-            cmd = goal.position
+            if self._inverted_logic:
+                goal.position = not goal.position
+                
+            cmd = DeckState.UP if goal.position else DeckState.DOWN
             time_started = rospy.Time.now().to_sec()
             cnt = 0
 
-            if self.is_running:
-                result.success = False
-                result.message = "Another command is ongoing! Try later."
-                self.action_server.set_aborted(result)
-                return
-
             if cmd == self._deck_state:
+                rospy.logwarn("Deck already in this position. Not moving.")
                 result.success = True
                 result.message = "Deck already in this position."
                 self.action_server.set_succeeded(result)
                 return
 
-            rospy.logwarn("- Deck goes to %s position" % ("lower" if cmd else "upper"))
+            rospy.logwarn("- Deck goes to %s position" % ("lower" if cmd == DeckState.DOWN else "upper"))
             self.is_running = True
 
             while not rospy.is_shutdown():
+                # Check Check if emergency stop is enabled
+                # if self._emergency_enabled:
+                #     rospy.logwarn("Emergency stop is enabled! Cannot execute deck action")
+                #     result.success = False
+                #     result.message = "Emergency stop is enabled!"
+                #     self.action_server.set_aborted(result)
+                #     return
+                
+                # # Check if CE block is enabled 
+                # if self._ce_block_enabled:
+                #     rospy.logwarn("CE block is enabled! Cannot execute deck action")
+                #     result.success = False
+                #     result.message = "CE block is enabled!"
+                #     self.action_server.set_aborted(result)
+                #     return
+            
                 # Check for preemption
                 if self.action_server.is_preempt_requested():
                     rospy.logwarn("Preemption requested. Stopping the operation.")
                     self.send_zero_commands()  # Stop the motors
+                    # Update the deck state to undefined
+                    self.update_deck_state(DeckState.UNDEFINED)
                     result.success = False
                     result.message = "Operation preempted by another goal."
                     self.action_server.set_preempted(result)
@@ -404,7 +432,7 @@ class Node:
 
                 # Continuously send motor commands
                 self.serial_lock.acquire()
-                if cmd:
+                if cmd == DeckState.UP:
                     self.roboclaw.BackwardM1(self.address, int(self._pwm_duty_cicle * 1.055))
                     self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
                 else:

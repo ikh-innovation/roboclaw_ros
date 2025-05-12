@@ -10,6 +10,8 @@
 <arg name="temperature_topic_name" default="temperature"/>
 <arg name="deck_position_topic_name" default="deck_position"/>
 <arg name="config_dir" default="$(find roboclaw_ros)/config/prismatic.yaml"/>
+<arg name="mower_emergency_stop_param" default="mower/emergency_stop"/>
+<arg name="mower_ce_block_enabled_param" default="mower/ce_block_enabled"/>
 
 
 <node pkg="roboclaw_ros" type="roboclaw_node.py" name="prismatic_driver_node" respawn="true" output="screen"> 
@@ -21,6 +23,8 @@
     <remap from="status" to="$(arg status_topic_name)"/>
     <remap from="temperature" to="$(arg temperature_topic_name)"/>
     <remap from="deck_position" to="$(arg deck_position_topic_name)"/>
+    <remap from="mower/ce_block_enabled" to="$(arg mower_ce_block_enabled_param)"/>
+    <remap from="mower/emergency_stop" to="$(arg mower_emergency_stop_param)"/>
 </node>
 
 </launch>
