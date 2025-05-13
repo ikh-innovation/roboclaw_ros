@@ -146,6 +146,7 @@ class Node:
         publish_rate = rospy.get_param("~publish_rate",5.0)
         self._deck_state = DeckState.UNDEFINED
         rospy.set_param("deck/state", DeckState.UNDEFINED.value)
+        self.deck_position_pub.publish(self._deck_state.name)
         # Timers
         self.period = rospy.Duration().from_sec(1.0/publish_rate)
         self.timer_update_rate = rospy.Duration().from_sec(1.0/rate)
@@ -311,8 +312,8 @@ class Node:
 
     def deck_control_cb(self, req):
         try:
-            # Invert logic if necessary
-            if self._inverted_logic:
+            # Invert logic if necessary (inverted is true for up and false for down)
+            if not self._inverted_logic:
                 req.data = not req.data
             
             # Create an action client
@@ -380,11 +381,7 @@ class Node:
         feedback = MovePrismaticFeedback()
         result = MovePrismaticResult()
 
-        try:        
-            # Call roboclaw_control with the goal position
-            if self._inverted_logic:
-                goal.position = not goal.position
-                
+        try:            
             cmd = DeckState.UP if goal.position else DeckState.DOWN
             time_started = rospy.Time.now().to_sec()
             cnt = 0
@@ -432,7 +429,7 @@ class Node:
 
                 # Continuously send motor commands
                 self.serial_lock.acquire()
-                if cmd == DeckState.UP:
+                if cmd == DeckState.DOWN:
                     self.roboclaw.BackwardM1(self.address, int(self._pwm_duty_cicle * 1.055))
                     self.roboclaw.BackwardM2(self.address, self._pwm_duty_cicle)
                 else:
@@ -450,6 +447,7 @@ class Node:
                 # Timeout
                 if duration > self._stop_move_timeout:
                     self.send_zero_commands()
+                    self.update_deck_state(DeckState.UNDEFINED)
                     result.success = False
                     result.message = "Timeout reached!"
                     self.action_server.set_aborted(result)
@@ -481,6 +479,7 @@ class Node:
 
             # If shutdown is triggered
             self.send_zero_commands()
+            self.update_deck_state(DeckState.UNDEFINED)
             result.success = False
             result.message = "Operation interrupted by shutdown."
             self.action_server.set_aborted(result)
@@ -488,6 +487,7 @@ class Node:
         except Exception as e:
             rospy.logerr("Unexpected error in execute_action_cb: %s" % str(e))
             self.send_zero_commands()
+            self.update_deck_state(DeckState.UNDEFINED)
             result.success = False
             result.message = "Unexpected error: %s" % str(e)
             self.action_server.set_aborted(result)
