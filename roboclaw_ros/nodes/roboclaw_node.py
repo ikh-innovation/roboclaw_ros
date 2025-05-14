@@ -145,8 +145,7 @@ class Node:
         rate = rospy.get_param("~rate",10.0)
         publish_rate = rospy.get_param("~publish_rate",5.0)
         self._deck_state = DeckState.UNDEFINED
-        rospy.set_param("deck/state", DeckState.UNDEFINED.value)
-        self.deck_position_pub.publish(self._deck_state.name)
+        self.update_deck_state(self._deck_state)
         # Timers
         self.period = rospy.Duration().from_sec(1.0/publish_rate)
         self.timer_update_rate = rospy.Duration().from_sec(1.0/rate)
@@ -366,15 +365,15 @@ class Node:
         if cmd == DeckState.UNDEFINED:
             self._deck_state = DeckState.UNDEFINED
             rospy.set_param("deck/state", DeckState.UNDEFINED.value)
-            msg.data = cmd.name
+            msg.data = cmd.name.lower()
         elif cmd == DeckState.DOWN:
             self._deck_state = DeckState.DOWN
             rospy.set_param("deck/state",  DeckState.DOWN.value)
-            msg.data = cmd.name
+            msg.data = cmd.name.lower()
         elif cmd == DeckState.UP:
             self._deck_state = DeckState.UP
             rospy.set_param("deck/state", DeckState.UP.value)
-            msg.data = cmd.name
+            msg.data = cmd.name.lower()
         self.deck_position_pub.publish(msg)
 
     def execute_action_cb(self, goal):
