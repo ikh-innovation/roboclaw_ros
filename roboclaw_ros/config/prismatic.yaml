@@ -6,24 +6,31 @@ address: 128 # Address defined in the device
 rate: 10 # Rate for the update callback (update and calculate values = main loop)
 publish_rate: 5 # Rate to publish the driver status, currents and temperatures (if enabled)
 
-
-# The total output power threshold to identify that the motors are not moving
-# When the node measures lower than this threshold the stop counter is increased
-# If stop_counter reaches the defined max_counter_stop value, then the node stops
-# the motors.
-power_stop_threshold: 0.3
-max_counter_stop: 5 
-stop_with_time: true
-stop_with_time_seconds: 12
-# Define the timeout command sent to the motors for safety reasons.
-stop_move_timeout: 20
-# Maximum value is 90! Warning on the motors maximum voltage
-pwm_duty_cycle: 80
-
 # Enable/Disable publishers 
 publish_temperature: true
 publish_status: true
 publish_currents: true
 
-# Inverted logic
+# The total output power threshold to identify that the motors are not moving
+# When the node measures lower than this threshold the stop counter is increased
+# If stop_counter reaches the defined max_counter_stop value, then the node stops
+# the motors.
+# IT DOESNT WORK. 
+power_stop_threshold: 0.3
+max_counter_stop: 5 
+
+currents_buffer_size: 10 # Size of the buffer of the currents 
+
+# The time in seconds to wait before stopping the motors
+# it is enabled when the stop_with_time parameter is set to true
+stop_with_time: true
+stop_with_time_seconds: 12
+
+# Timeout command sent to the motors for safety reasons.
+stop_move_timeout: 20
+# Maximum value is 90! Warning on the motors maximum voltage
+pwm_duty_cycle: 80
+
+# Inverted logic (when true the motors are inverted means forward is backward means
+# backward going deck down and 
 service_inverted_logic: true
