@@ -386,13 +386,13 @@ class Node:
             cnt = 0
 
             if cmd == self._deck_state:
-                rospy.logwarn("Deck already in this position. Not moving.")
+                rospy.logwarn("- Deck is already in the (%s) position. Not moving." % cmd.name)
                 result.success = True
-                result.message = "Deck already in this position."
+                result.message = "Deck is already in the %s position" % cmd.name
                 self.action_server.set_succeeded(result)
                 return
 
-            rospy.logwarn("- Deck goes to %s position" % ("lower" if cmd == DeckState.DOWN else "upper"))
+            rospy.logwarn("- Deck goes to %s position." % ("lower" if cmd == DeckState.DOWN else "upper"))
             self.is_running = True
 
             while not rospy.is_shutdown():
@@ -419,7 +419,7 @@ class Node:
                     # Update the deck state to undefined
                     self.update_deck_state(DeckState.UNDEFINED)
                     result.success = False
-                    result.message = "Operation preempted by another goal."
+                    result.message = "Operation preempted by another goal. Deck position is now undefined."
                     self.action_server.set_preempted(result)
                     self.is_running = False
                     return
@@ -445,20 +445,22 @@ class Node:
 
                 # Timeout
                 if duration > self._stop_move_timeout:
+                    rospy.logwarn("Positioning timeout reached. Stopping the deck.")
                     self.send_zero_commands()
                     self.update_deck_state(DeckState.UNDEFINED)
                     result.success = False
-                    result.message = "Timeout reached!"
+                    result.message = "Timeout reached. Deck position is now (undefined)"
                     self.action_server.set_aborted(result)
                     return
 
                 # Stop with time
                 elif self._stop_with_time and duration >= self._stop_with_time_seconds:
+                    rospy.logwarn("Deck reached the %s position based on time." % cmd.name)
                     rospy.sleep(1)
                     self.send_zero_commands()
                     self.update_deck_state(cmd)
                     result.success = True
-                    result.message = "Position reached."
+                    result.message = "The deck has reached the %s position" % cmd.name
                     self.action_server.set_succeeded(result)
                     return
 
@@ -466,21 +468,23 @@ class Node:
                 elif duration > 2 and self.outputpower < self._power_stop_threshold and not self._stop_with_time:
                     cnt += 1
                     if cnt > self._max_cnt_to_stop:
+                        rospy.logwarn("Deck reached the %s position based on power threshold." % cmd.name)
                         rospy.sleep(1)
                         self.send_zero_commands()
                         self.update_deck_state(cmd)
                         result.success = True
-                        result.message = "Position reached."
+                        result.message = "The deck has reached the %s position" % cmd.name
                         self.action_server.set_succeeded(result)
                         return
 
                 rospy.sleep(self.timer_update_rate.to_sec())
 
             # If shutdown is triggered
+            rospy.logwarn("Shutdown triggered. Stopping the operation.")
             self.send_zero_commands()
             self.update_deck_state(DeckState.UNDEFINED)
             result.success = False
-            result.message = "Operation interrupted by shutdown."
+            result.message = "Operation interrupted by shutdown"
             self.action_server.set_aborted(result)
 
         except Exception as e:
@@ -488,7 +492,7 @@ class Node:
             self.send_zero_commands()
             self.update_deck_state(DeckState.UNDEFINED)
             result.success = False
-            result.message = "Unexpected error: %s" % str(e)
+            result.message = "Unexpected error"
             self.action_server.set_aborted(result)
 
 if __name__ == "__main__":
