@@ -6,6 +6,7 @@
 <arg name="m2_current_topic_name" default="m2_current"/>
 <arg name="m1_current_last_topic_name" default="m1_current_last"/>
 <arg name="m2_current_last_topic_name" default="m2_current_last"/>
+<arg name="output_power_topic_name" default="output_power"/>
 <arg name="status_topic_name" default="status"/>
 <arg name="temperature_topic_name" default="temperature"/>
 <arg name="deck_position_topic_name" default="deck_position"/>
@@ -18,8 +19,11 @@
     <rosparam command="load" file="$(arg config_dir)" subst_value="true"/>
     <!--Control prismatic motors service  -->
     <remap from="move_prismatic" to="$(arg move_prismatic_service_name)"/>
-    <remap from="m1_current" to="$(arg m1_current_topic_name)"/>
-    <remap from="m2_current" to="$(arg m2_current_topic_name)"/>
+    <remap from="m1_current_mean" to="$(arg m1_current_topic_name)"/>
+    <remap from="m2_current_mean" to="$(arg m2_current_topic_name)"/>
+    <remap from="m1_current_last" to="$(arg m1_current_last_topic_name)"/>
+    <remap from="m2_current_last" to="$(arg m2_current_last_topic_name)"/>
+    <remap from="output_power" to="$(arg output_power_topic_name)"/>
     <remap from="status" to="$(arg status_topic_name)"/>
     <remap from="temperature" to="$(arg temperature_topic_name)"/>
     <remap from="deck_position" to="$(arg deck_position_topic_name)"/>
