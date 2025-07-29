@@ -44,13 +44,16 @@
   <build_depend>std_msgs</build_depend>
   <build_depend>std_srvs</build_depend>
   <build_depend>tf</build_depend>
-  <build_depend>ikh_ros_msgs</build_depend>
+  <build_depend>actionlib</build_depend>
+  <build_depend>actionlib_msgs</build_depend>
   <build_depend>ikh_ros_msgs</build_depend>
   <build_depend>numpy</build_depend>
   <run_depend>rospy</run_depend>
   <run_depend>std_msgs</run_depend>
   <run_depend>tf</run_depend>
   <run_depend>std_srvs</run_depend>
+  <run_depend>actionlib</run_depend>
+  <run_depend>actionlib_msgs</run_depend>
   <run_depend>ikh_ros_msgs</run_depend>
   <run_depend>numpy</run_depend>
 
