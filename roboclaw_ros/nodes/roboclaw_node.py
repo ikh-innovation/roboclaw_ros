@@ -11,83 +11,6 @@ import re, csv, os, threading, time
 import datetime as  dt
 from enum import Enum
 
-# class CurrentDataLogger:
-#     """
-#     Class for logging motor current data to CSV files for later analysis.
-    
-#     Helps detect mechanical limits by capturing currents behavior
-#     between deck positions (up/down).
-#     """
-#     def __init__(self, log_dir="/tmp/roboclaw_current_logs"):
-#         self.log_dir = log_dir
-#         self.is_logging = False
-#         self.log_file = None
-#         self.csv_writer = None
-#         self.csv_file = None
-#         self.start_time = None
-#         self.movement_type = None
-#         self.lock = threading.Lock()  # Add a lock for thread safety
-        
-#         # Create log directory if it doesn't exist
-#         if not os.path.exists(self.log_dir):
-#             os.makedirs(self.log_dir)
-    
-#     def start_logging(self, movement_type):
-#         """
-#         Start logging current data for a specific movement type.
-        
-#         Args:
-#             movement_type (str): Type of movement ('up_to_down' or 'down_to_up')
-#         """
-#         with self.lock:  # Use lock for thread safety
-#             if self.is_logging:
-#                 self.stop_logging()
-                
-#             self.movement_type = movement_type
-#             timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-#             self.log_file = os.path.join(self.log_dir, "current_log_%s_%s.csv" % (movement_type, timestamp))
-#             self.csv_file = open(self.log_file, 'w')
-#             self.csv_writer = csv.writer(self.csv_file)
-            
-#             # Write header with buffer status column
-#             self.csv_writer.writerow(['timestamp', 'elapsed_time', 'm1_current', 'm2_current', 
-#                                 'm1_current_last', 'm2_current_last', 'output_power', 'buffer_ready'])
-#             self.start_time = rospy.Time.now().to_sec()
-#             self.is_logging = True
-#             rospy.loginfo("Started logging current data for %s movement to %s" % (movement_type, self.log_file))
-
-#     def log_data(self, m1_current, m2_current, m1_current_last, m2_current_last, output_power, buffer_ready=False):
-#         """
-#         Log a data point to the CSV file.
-        
-#         Args:
-#             m1_current (float): Mean current for motor 1
-#             m2_current (float): Mean current for motor 2
-#             m1_current_last (float): Latest current for motor 1
-#             m2_current_last (float): Latest current for motor 2
-#             output_power (float): Output power of the motors
-#             buffer_ready (bool): Whether the buffer contains valid data
-#         """
-#         with self.lock:  # Use lock for thread safety
-#             if not self.is_logging or self.csv_writer is None:
-#                 return
-                
-#             timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-#             elapsed_time = rospy.Time.now().to_sec() - self.start_time
-            
-#             self.csv_writer.writerow([timestamp, elapsed_time, m1_current, m2_current, 
-#                                 m1_current_last, m2_current_last, output_power, buffer_ready])
-    
-#     def stop_logging(self):
-#         """Stop the current logging session and close the file."""
-#         with self.lock:  # Use lock for thread safety
-#             if self.is_logging and self.csv_file is not None:
-#                 self.is_logging = False  # Set this first to prevent new writes
-#                 self.csv_file.close()
-#                 rospy.loginfo("Stopped logging current data. Log saved to %s" % self.log_file)
-#                 self.csv_file = None
-#                 self.csv_writer = None
-            
 class MotorCurrents:
     def __init__(self):
         self._bufferSize =  rospy.get_param("~currents_buffer_size", 10)  # Size of the buffer
@@ -273,8 +196,12 @@ class Node:
         # Read and append currents to the current instance
         #tick = rospy.Time.now().to_sec()
         self.serial_lock.acquire()
-        res = self.read_currents()
-        if(self.serial_lock.locked()):
+        try:
+            res = self.read_currents()
+        except Exception as e:
+            rospy.logerr_throttle(10, "Roboclaw Node: current read failed: {}".format(e))
+            res = None
+        finally:
             self.serial_lock.release()
         if res is not None:
             m1_raw, m2_raw = res
@@ -314,28 +241,28 @@ class Node:
             
         # Read and publish Errors
         self.serial_lock.acquire()
-        if (self._publish_roboclaw_status and self._status_pub.get_num_connections()>0):
-            res = self.read_list_of_errors()
-            if (res!=None):
-                self._publish_list_of_errors(res)
-        
-        # Read and publish Temp
-        if (self._publish_roboclaw_temperature and self._temp_pub.get_num_connections()>0):
-            res = self.read_temps()
-            if (res!=None):
-                self._publish_temperature(res/10)
-        
-        if (self._pwms.get_num_connections()>0):
-            pwms = self.roboclaw.ReadPWMs(self.address)
-            if (pwms[0]):
-                msg = Float32MultiArray()
-                #tick = rospy.Time.now().to_sec()
-                #print("Time to read PWMs: {}".format(rospy.Time.now().to_sec()-tick))
-                msg.data.append(pwms[1])
-                msg.data.append(pwms[2])
-                self._pwms.publish(msg)
-        
-        if(self.serial_lock.locked()):
+        try:
+            if (self._publish_roboclaw_status and self._status_pub.get_num_connections()>0):
+                res = self.read_list_of_errors()
+                if (res!=None):
+                    self._publish_list_of_errors(res)
+
+            # Read and publish Temp
+            if (self._publish_roboclaw_temperature and self._temp_pub.get_num_connections()>0):
+                res = self.read_temps()
+                if (res!=None):
+                    self._publish_temperature(res / 10.0)
+
+            if (self._pwms.get_num_connections()>0):
+                pwms = self.roboclaw.ReadPWMs(self.address)
+                if (pwms[0]):
+                    msg = Float32MultiArray()
+                    msg.data.append(pwms[1])
+                    msg.data.append(pwms[2])
+                    self._pwms.publish(msg)
+        except Exception as e:
+            rospy.logerr_throttle(10, "Roboclaw Node: serial read failed: {}".format(e))
+        finally:
             self.serial_lock.release()
                       
     def _open_roboclaw_port(self):
