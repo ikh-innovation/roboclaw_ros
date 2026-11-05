@@ -24,7 +24,7 @@ class MotorCurrents:
         self._m2_exp = 0.0
         self._exp_initialized = False
         self.data_lock = threading.Lock()  # Add thread safety
-    
+
     def reset(self):
         """Reset all current buffers to zero values."""
         with self.data_lock:
@@ -34,7 +34,7 @@ class MotorCurrents:
             self.buffer_filled = False
             self.buffer_fill_counter = 0
             rospy.logdebug("Current buffers reset to zero")
-    
+
     def appendM1(self, value):
         with self.data_lock:
             self.m1 = np.append(self.m1, value)
@@ -59,7 +59,7 @@ class MotorCurrents:
                 self._exp_initialized = True
             else:
                 self._m2_exp = self._alpha * value + (1 - self._alpha) * self._m2_exp
-    
+
     def _update_buffer_status(self):
         """Track when buffer is completely filled with real readings"""
         if not self.buffer_filled:
@@ -67,7 +67,7 @@ class MotorCurrents:
             if self.buffer_fill_counter >= self._bufferSize:
                 self.buffer_filled = True
                 rospy.logdebug("Current buffer fully populated with real data")
-    
+
     def is_buffer_ready(self):
         """Returns True if buffer filled with real measurements"""
         with self.data_lock:
@@ -102,7 +102,7 @@ class MotorCurrents:
     def getOutputPower(self):
         with self.data_lock:
             return (np.mean(self.m1)**2) + (np.mean(self.m2)**2)
-    
+
     def getExpFilteredCurrents(self):
         with self.data_lock:
             return [self._m1_exp, self._m2_exp]
@@ -110,7 +110,7 @@ class MotorCurrents:
     def getExpFilteredOutputPower(self):
         with self.data_lock:
             return (self._m1_exp ** 2) + (self._m2_exp ** 2)
-        
+
 class DeckState(Enum):
     UNDEFINED = -1
     UP = 1
@@ -144,7 +144,7 @@ class Node:
         # Open roboclaw port and check version
         self._open_roboclaw_port()
         self.motorCurrents = MotorCurrents()
-        
+
         # Publishers
         self._m1_current_last_pub = rospy.Publisher('m1_current_last', FloatStamped, queue_size=10)
         self._m2_current_last_pub = rospy.Publisher('m2_current_last', FloatStamped, queue_size=10)
@@ -158,7 +158,7 @@ class Node:
 
         # Service Server
         self.deck_control_srv = rospy.Service('move_prismatic', SetBool, self._deck_control_cb)
-        
+
         # Action Server
         self.action_server = SimpleActionServer('move_prismatic_action',
             MovePrismaticAction,
@@ -181,17 +181,17 @@ class Node:
         self._emergency_enabled = rospy.get_param("mower/emergency_stop",False)
         update_rate = rospy.get_param("~rate",10.0)
         publish_rate = rospy.get_param("~publish_rate",5.0)
-        
+
         self._is_running = False # Parameter to indicate that the motors are running.
         self._deck_state = DeckState.UNDEFINED
         self._update_deck_state(self._deck_state)
         self._update_period = rospy.Duration().from_sec(1.0/update_rate)
         self._publish_period = rospy.Duration().from_sec(1.0/publish_rate)
-       
+
         # Create the current data logger
         # log_dir = rospy.get_param("~log_dir", os.path.join(os.path.expanduser("~"), "roboclaw_logs"))
         # self.current_logger = CurrentDataLogger(log_dir=log_dir)
-            
+
     def _read_data_cb(self, timer):
         # Read and append currents to the current instance
         #tick = rospy.Time.now().to_sec()
@@ -212,10 +212,10 @@ class Node:
             #print("Time to read Currents: {}".format(rospy.Time.now().to_sec()-tick))
             self.motorCurrents.appendM1(m1_current)
             self.motorCurrents.appendM2(m2_current)
-        
+
             # Log data if logging is active
             # self._log_current_data()
-  
+
     def _publish_data_cb(self, timer):
         # Publish Mean Current Messages
         if (self._publish_currents and (self._m1_current_pub.get_num_connections()>0 or self._m2_current_pub.get_num_connections()>0)):
@@ -237,8 +237,8 @@ class Node:
             msg.data = current_1_last[-1]
             self._m1_current_last_pub.publish(msg)
             msg.data = current_2_last[-1]
-            self._m2_current_last_pub.publish(msg)   
-            
+            self._m2_current_last_pub.publish(msg)
+
         # Read and publish Errors
         self.serial_lock.acquire()
         try:
@@ -264,7 +264,7 @@ class Node:
             rospy.logerr_throttle(10, "Roboclaw Node: serial read failed: {}".format(e))
         finally:
             self.serial_lock.release()
-                      
+
     def _open_roboclaw_port(self):
         rospy.loginfo('Roboclaw Node: Try to open port...')
         try:
@@ -292,7 +292,7 @@ class Node:
                 rospy.loginfo("Roboclaw version: %s" % self.firmware_version)
             else:
                 rospy.logwarn("Could not parse version number from response")
-          
+
     def _port_permissions(self, port):
         try:
             import os
@@ -332,7 +332,7 @@ class Node:
                 return None
         except:
             raise Exception("Cannot read roboclaw errors")
-    
+
     def read_currents(self):
         try:
             _cr, m1_current, m2_current = self.roboclaw.ReadCurrents(
@@ -343,12 +343,12 @@ class Node:
                 return None
         except:
             raise Exception("Cannot read roboclaw motor currents")
-        
+
     def _publish_list_of_errors(self, lst):
         msg = String()
         msg.data = str(lst)
         self._status_pub.publish(msg)
-    
+
     def _publish_temperature(self, temp):
         msg = FloatStamped()
         msg.header.stamp = rospy.Time.now()
@@ -368,43 +368,43 @@ class Node:
         """
         duty = int(float(old_pwm) * 32767 / 127)
         return duty
-    
+
     def compare_versions(self, ver1, ver2):
         """
         Compare two version strings in semantic versioning format (e.g., "4.3.6").
-        
+
         Args:
             ver1 (str): First version string to compare.
             ver2 (str): Second version string to compare.
-            
+
         Returns:
             int: -1 if ver1 < ver2, 0 if ver1 == ver2, 1 if ver1 > ver2
         """
         v1_parts = [int(x) for x in ver1.split('.')]
         v2_parts = [int(x) for x in ver2.split('.')]
-        
+
         # Pad shorter version with zeros
         while len(v1_parts) < len(v2_parts):
             v1_parts.append(0)
         while len(v2_parts) < len(v1_parts):
             v2_parts.append(0)
-            
+
         for i in range(len(v1_parts)):
             if v1_parts[i] < v2_parts[i]:
                 return -1
             elif v1_parts[i] > v2_parts[i]:
                 return 1
-                
+
         return 0  # Versions are equal
 
     def _use_duty_commands(self):
         """
         Determines if the firmware version supports Duty commands.
-        
+
         Firmware versions >= 4.3.6 use DutyM1/DutyM2 commands which accept values
         in the range -32767 to +32767. Older firmware versions use ForwardM1/BackwardM1
         commands which accept values in the range 0-127.
-        
+
         Returns:
             bool: True if the firmware supports Duty commands, False otherwise.
         """
@@ -415,7 +415,7 @@ class Node:
             # Invert logic if necessary (inverted is true for up and false for down)
             if not self._inverted_logic:
                 req.data = not req.data
-            
+
             # Create an action client
             client = SimpleActionClient('move_prismatic_action', MovePrismaticAction)
 
@@ -462,7 +462,7 @@ class Node:
         finally:
             if self.serial_lock.locked():
                 self.serial_lock.release()
-    
+
     def motors_stop(self):
         self.serial_lock.acquire()
         self._is_running = False
@@ -480,7 +480,7 @@ class Node:
                 self.serial_lock.release()
 
     def _update_deck_state(self, cmd):
-        rospy.loginfo("Updating deck state to: %s" % cmd.name) 
+        rospy.loginfo("Updating deck state to: %s" % cmd.name)
         msg = String()
         if cmd == DeckState.UNDEFINED:
             self._deck_state = DeckState.UNDEFINED
@@ -500,7 +500,7 @@ class Node:
         feedback = MovePrismaticFeedback()
         result = MovePrismaticResult()
 
-        try:            
+        try:
             cmd = DeckState.UP if goal.position else DeckState.DOWN
             time_started = rospy.Time.now().to_sec()
             cnt = 0
@@ -517,7 +517,7 @@ class Node:
             #     self.current_logger.start_logging("down_to_up")
             # else:
             #     self.current_logger.start_logging("up_to_down")
-            
+
             rospy.logwarn("- Deck goes to %s position" % ("lower" if cmd == DeckState.DOWN else "upper"))
             self._is_running = True
 
@@ -529,20 +529,20 @@ class Node:
                 #     result.message = "Emergency stop is enabled!"
                 #     self.action_server.set_aborted(result)
                 #     return
-                
-                # # Check if CE block is enabled 
+
+                # # Check if CE block is enabled
                 # if self._ce_block_enabled:
                 #     rospy.logwarn("CE block is enabled! Cannot execute deck action")
                 #     result.success = False
                 #     result.message = "CE block is enabled!"
                 #     self.action_server.set_aborted(result)
                 #     return
-            
+
                 # Check for preemption
                 if self.action_server.is_preempt_requested():
                     rospy.logwarn("Preemption requested. Stopping the operation.")
                     self.motors_stop()  # Stop the motors
-                    # self.current_logger.stop_logging()  
+                    # self.current_logger.stop_logging()
                     # Update the deck state to undefined
                     self._update_deck_state(DeckState.UNDEFINED)
                     result.success = False
@@ -562,9 +562,9 @@ class Node:
                     converted_pwm_duty_1 = self.convert_pwm_to_duty(int(self._pwm_duty_cycle))
                     converted_pwm_duty_2 = self.convert_pwm_to_duty(self._pwm_duty_cycle)
                     self.motors_forward(converted_pwm_duty_1, converted_pwm_duty_2)
-            
+
                 exp_output_power = self.motorCurrents.getExpFilteredOutputPower()
-                
+
                 # Publish feedback
                 feedback.power_output = exp_output_power
                 feedback.iterations = cnt
@@ -574,7 +574,7 @@ class Node:
                 # Stop if timeout is reached
                 if duration > self._stop_move_timeout:
                     self.motors_stop()
-                    # self.current_logger.stop_logging()  
+                    # self.current_logger.stop_logging()
                     self._update_deck_state(DeckState.UNDEFINED)
                     result.success = False
                     result.message = "Timeout reached. Deck position is now (undefined)"
@@ -586,7 +586,7 @@ class Node:
                     rospy.logwarn("Deck reached the %s position based on time." % cmd.name)
                     rospy.sleep(1)
                     self.motors_stop()
-                    # self.current_logger.stop_logging()  
+                    # self.current_logger.stop_logging()
                     self._update_deck_state(cmd)
                     result.success = True
                     result.message = "The deck has reached the %s position" % cmd.name
@@ -600,7 +600,7 @@ class Node:
                         rospy.logwarn("Deck reached the %s position based on power threshold." % cmd.name)
                         rospy.sleep(1)
                         self.motors_stop()
-                        # self.current_logger.stop_logging()  
+                        # self.current_logger.stop_logging()
                         self._update_deck_state(cmd)
                         result.success = True
                         result.message = "The deck has reached the %s position" % cmd.name
@@ -611,7 +611,7 @@ class Node:
 
             # If shutdown is triggered
             self.motors_stop()
-            # self.current_logger.stop_logging()  
+            # self.current_logger.stop_logging()
             self._update_deck_state(DeckState.UNDEFINED)
             result.success = False
             result.message = "Operation interrupted by shutdown"
@@ -620,7 +620,7 @@ class Node:
         except Exception as e:
             rospy.logerr("Unexpected error in execute_action_cb: %s" % str(e))
             self.motors_stop()
-            # self.current_logger.stop_logging()  
+            # self.current_logger.stop_logging()
             self._update_deck_state(DeckState.UNDEFINED)
             result.success = False
             result.message = "Unexpected error"
@@ -639,7 +639,7 @@ class Node:
                 output_power,
                 buffer_ready
             )
-            
+
     def run(self):
         rospy.loginfo("Starting roboclaw node")
         # Start the action server
@@ -648,7 +648,7 @@ class Node:
         self.timer1 = rospy.Timer(self._update_period, self._read_data_cb)
         self.timer2 = rospy.Timer(self._publish_period, self._publish_data_cb)
         rospy.spin()
-        
+
 if __name__ == "__main__":
     try:
         rospy.init_node("roboclaw_node")
