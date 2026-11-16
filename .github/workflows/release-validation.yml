@@ -1,0 +1,14 @@
+name: Package Release Validation
+
+on:
+  pull_request:
+    branches:
+      - dual_prismatic
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Package Release Validation
+    uses: ikh-innovation/.github/.github/workflows/ros1-package-release.yml@281ea7e6e258753aeb1827743df5dfe0dc5ab4e6
