@@ -11,4 +11,45 @@ permissions:
 jobs:
   validate:
     name: Package Release Validation
-    uses: ikh-innovation/.github/.github/workflows/ros1-package-release.yml@281ea7e6e258753aeb1827743df5dfe0dc5ab4e6
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout package repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate ROS metadata and release changelog
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import xml.etree.ElementTree as ET
+
+          packages = [p for p in Path('.').rglob('package.xml') if '.git' not in p.parts]
+          if not packages:
+              raise SystemExit('No package.xml found')
+          names = set()
+          for package in packages:
+              root = ET.parse(package).getroot()
+              if root.tag != 'package':
+                  raise SystemExit('{}: invalid ROS package XML'.format(package))
+              for field in ('name', 'version', 'description', 'maintainer', 'license'):
+                  if not (root.findtext(field) or '').strip():
+                      raise SystemExit('{}: missing {}'.format(package, field))
+              name = root.findtext('name').strip()
+              if name in names:
+                  raise SystemExit('Duplicate ROS package name: ' + name)
+              names.add(name)
+              print('PASS: ' + name)
+
+          match = re.fullmatch(r'release/(v[0-9]+[.][0-9]+[.][0-9]+)', os.environ['HEAD_REF'])
+          if match:
+              changelog = Path('CHANGELOG.md')
+              heading = '## [{}]'.format(match.group(1))
+              lines = changelog.read_text().splitlines() if changelog.is_file() else []
+              if not any(line == heading or line.startswith(heading + ' ') for line in lines):
+                  raise SystemExit('Missing CHANGELOG.md entry for ' + match.group(1))
+              print('PASS: release changelog ' + match.group(1))
+          PY

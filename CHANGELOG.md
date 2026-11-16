@@ -12,4 +12,4 @@
 - Remove an unused commented-out current logger.
 
 ### CI
-- Add reusable ROS1 package release metadata validation for `dual_prismatic`.
+- Add local ROS1 package release metadata validation for `dual_prismatic`.
